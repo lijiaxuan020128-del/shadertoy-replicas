@@ -3,15 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Creation — 本地复刻 (Shadertoy XsXXDn)</title>
+<title>Creation v2 · 参数滑杆 (Shadertoy XsXXDn)</title>
 <!--
-  本地复刻自 Shadertoy: https://www.shadertoy.com/view/XsXXDn
-  原作者: Silexars (Danilo Guanabara)
-  作品: Creation — DemoJS 2011 亚军，据称是首个 1kB WebGL intro
-        (http://www.pouet.net/prod.php?which=57245)
-  许可: CC BY-NC-SA 3.0 (https://creativecommons.org/licenses/by-nc-sa/3.0/deed.zh)
-  着色器在原作基础上将部分常量参数化为 uniform（本地调节用），
-  默认值与原作完全一致；并新增一个默认关闭的色相旋转后期效果。
+  历史快照 v2（参数滑杆版）：对应 https://www.shadertoy.com/view/XsXXDn
+  原作者: Silexars (Danilo Guanabara) | 许可: CC BY-NC-SA 3.0
+  此版本加入了 9 个参数滑杆面板，尚无鼠标跟随与背景音乐。
 -->
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
@@ -46,8 +42,6 @@
     color: rgba(223,232,245,.9);
   }
   #panel .row .val { color: #8fc1ff; font-variant-numeric: tabular-nums; }
-  #panel label.chk { display: flex; align-items: center; gap: 6px; margin: 2px 0 9px; cursor: pointer; }
-  #panel label.chk input { accent-color: #5b9bff; margin: 0; }
   #panel input[type=range] {
     width: 100%; height: 18px; margin: 0; accent-color: #5b9bff; cursor: pointer;
   }
@@ -66,53 +60,18 @@
   #togglePanel:hover { background: rgba(30,50,80,.8); }
   #panel::-webkit-scrollbar { width: 8px; }
   #panel::-webkit-scrollbar-thumb { background: rgba(140,180,255,.25); border-radius: 4px; }
-
-  /* ---- 版本切换 ---- */
-  #verBar {
-    position: fixed; top: 12px; left: 12px; z-index: 10;
-    display: flex; gap: 6px; align-items: center;
-    background: rgba(8,14,24,.78); backdrop-filter: blur(8px);
-    border: 1px solid rgba(140,180,255,.18); border-radius: 8px;
-    padding: 6px 10px; color: #cfe2ff;
-    font: 12px "Segoe UI", "Microsoft YaHei", sans-serif;
-    user-select: none;
-  }
-  #verBar select {
-    background: rgba(91,155,255,.15); color: #dfe8f5;
-    border: 1px solid rgba(140,180,255,.3); border-radius: 6px;
-    padding: 3px 6px; font: inherit; cursor: pointer;
-  }
-  #verFrame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 9; background: #000; }
 </style>
 </head>
 <body>
-<div id="verBar" title="切换到历史版本快照">
-  <span>🕐 版本</span>
-  <select id="verSelect">
-    <option value="" selected>v4 · 背景音乐（当前）</option>
-    <option value="versions/v3.html">v3 · 鼠标跟随放射中心</option>
-    <option value="versions/v2.html">v2 · 参数滑杆面板</option>
-    <option value="versions/v1.html">v1 · 初始复刻</option>
-  </select>
-</div>
 <canvas id="c"></canvas>
-<audio id="bgm" src="music.mp3" loop preload="auto"></audio>
 <button id="togglePanel" title="显示/隐藏参数面板">⚙ 参数</button>
 
 <div id="panel">
   <h2><span>参数调节</span><span id="fps" style="font-weight:400;color:#7d97bd;font-variant-numeric:tabular-nums"></span></h2>
-  <label class="chk"><input type="checkbox" id="followChk" checked> 鼠标控制放射中心</label>
   <div id="sliders"></div>
   <div class="btns">
     <button id="resetBtn">恢复默认</button>
     <button id="resetTimeBtn">时间归零</button>
-  </div>
-  <div class="btns">
-    <button id="musicBtn">♪ 音乐 开</button>
-  </div>
-  <div class="row" style="margin-top:8px">
-    <div class="lab"><span>音量</span><span class="val" id="volVal">0.70</span></div>
-    <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.7">
   </div>
 </div>
 
@@ -120,7 +79,7 @@
   <b>Creation</b> — 本地复刻 · 原作
   <a href="https://www.shadertoy.com/view/XsXXDn" target="_blank" rel="noopener">Silexars (Danilo Guanabara) @ Shadertoy</a>
   (CC BY-NC-SA 3.0)<br>
-  <span class="dim">鼠标悬停：改变放射中心 · 点击 / 空格：暂停或继续</span>
+  <span class="dim">点击 / 空格：暂停或继续</span>
 </div>
 
 <script id="frag" type="x-shader/x-fragment">
@@ -136,7 +95,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ){
 	for(int i=0;i<3;i++) {
 		vec2 uv,p=fragCoord.xy/r;
 		uv=p;
-		p-=uCenter;
+		p-=.5;
 		p.x*=r.x/r.y;
 		p/=uZoom;
 		z+=uDispersion;
@@ -157,8 +116,6 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ){
   const PARAM_DEFS = [
     { key: "timeScale",  label: "时间速度",   min: 0,    max: 3,    step: 0.05,  def: 1,
       tip: "整体动画快慢（JS 侧缩放）" },
-    { key: "followSmooth", label: "跟随平滑", min: 0,    max: 0.9,  step: 0.05,  def: 0.1,
-      tip: "放射中心跟随鼠标的平滑度：0 = 即时跟随，越大越柔缓" },
     { key: "dispersion", label: "色散强度",   min: 0,    max: 0.3,  step: 0.005, def: 0.07,
       tip: "RGB 三层的相位差，0 = 黑白" },
     { key: "waveFreq",   label: "波纹频率",   min: 1,    max: 30,   step: 0.5,   def: 9,
@@ -205,7 +162,6 @@ uniform float uCell;        // 原 1.0（mod 网格尺寸）
 uniform float uGlow;        // 原 0.01
 uniform float uHue;         // 新增后期：0 = 原作
 uniform float uZoom;        // 原 1.0
-uniform vec2  uCenter;      // 放射中心（归一化坐标，原作为屏幕中心 .5,.5）
 
 vec3 hueRotate(vec3 col, float a) {
   const vec3 k = vec3(0.57735);
@@ -241,10 +197,6 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
     if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
       const log = gl.getShaderInfoLog(sh);
       console.error(log);
-      document.body.insertAdjacentHTML("beforeend",
-        "<pre style='color:#f88;font:12px monospace;padding:1em;white-space:pre-wrap;z-index:9'>" +
-        String(log).replace(/[<>&]/g, ch => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[ch])) +
-        "</pre>");
       throw new Error(log);
     }
     return sh;
@@ -272,7 +224,7 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
   for (const n of ["iResolution","iTime","iTimeDelta","iFrameRate","iFrame",
                    "iMouse","iDate","iSampleRate","iChannelTime","iChannelResolution",
                    "uDispersion","uWaveFreq","uWavePhase","uSwirlGain","uCell",
-                   "uGlow","uHue","uZoom","uCenter"]) {
+                   "uGlow","uHue","uZoom"]) {
     U[n] = gl.getUniformLocation(prog, n);
   }
 
@@ -334,29 +286,9 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
     if (isMove && mouse.down) { mouse.dx = x; mouse.dy = y; }
     mouse.x = x; mouse.y = y;
   }
-
-  // ---- 放射中心跟随鼠标 ----
-  const center = { x: 0.5, y: 0.5 }, centerTarget = { x: 0.5, y: 0.5 };
-  let followMouse = true;
-  function updateCenterTarget() {
-    if (!followMouse || canvas.width === 0) return;
-    centerTarget.x = mouse.x / canvas.width;
-    centerTarget.y = mouse.y / canvas.height;
-  }
-  canvas.addEventListener("mousemove", updateCenterTarget);
-  canvas.addEventListener("mousedown", updateCenterTarget);
-  canvas.addEventListener("mouseleave", () => { centerTarget.x = 0.5; centerTarget.y = 0.5; });
   canvas.addEventListener("mousedown", e => { mouse.down = true; setMouse(e, false); });
   canvas.addEventListener("mousemove", e => setMouse(e, true));
   window.addEventListener("mouseup", () => { mouse.down = false; });
-
-  // WebGL 上下文丢失时自动恢复
-  canvas.addEventListener("webglcontextlost", e => {
-    e.preventDefault();
-    document.body.insertAdjacentHTML("beforeend",
-      "<div id='ctxlost' style='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#aac8ff;font:14px sans-serif;background:rgba(0,0,0,.6)'>WebGL 上下文丢失，正在恢复…</div>");
-  });
-  canvas.addEventListener("webglcontextrestored", () => location.reload());
   let paused = false;
   canvas.addEventListener("click", () => { paused = !paused; });
   window.addEventListener("keydown", e => {
@@ -368,62 +300,6 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
   const toggleBtn = document.getElementById("togglePanel");
   toggleBtn.addEventListener("click", () => {
     panel.classList.toggle("hidden");
-  });
-
-  // 鼠标放射中心开关
-  const followChk = document.getElementById("followChk");
-  followChk.addEventListener("change", () => {
-    followMouse = followChk.checked;
-    if (!followMouse) { centerTarget.x = 0.5; centerTarget.y = 0.5; }
-  });
-
-  // ---- 背景音乐（无限循环；浏览器要求首次真实交互后才能出声）----
-  const bgm = document.getElementById("bgm");
-  const musicBtn = document.getElementById("musicBtn");
-  const volSlider = document.getElementById("volSlider");
-  const volVal = document.getElementById("volVal");
-  let musicOn = true;
-  bgm.volume = 0.7;
-  function tryStartMusic() {
-    if (musicOn && bgm.paused) bgm.play().catch(() => {});
-  }
-  function updateMusicBtn() {
-    musicBtn.textContent = musicOn ? "♪ 音乐 开" : "♪ 音乐 关";
-  }
-  window.addEventListener("pointerdown", tryStartMusic);
-  window.addEventListener("keydown", tryStartMusic);
-  musicBtn.addEventListener("click", () => {
-    musicOn = !musicOn;
-    if (musicOn) tryStartMusic(); else bgm.pause();
-    updateMusicBtn();
-  });
-  bgm.addEventListener("error", () => {
-    musicBtn.textContent = "♪ 音乐不可用";
-    musicBtn.disabled = true;
-    volSlider.disabled = true;
-  });
-  volSlider.addEventListener("input", () => {
-    bgm.volume = parseFloat(volSlider.value);
-    volVal.textContent = bgm.volume.toFixed(2);
-  });
-
-  // ---- 版本切换：切换到 versions/ 下的历史快照 ----
-  const verSelect = document.getElementById("verSelect");
-  let verFrame = null;
-  verSelect.addEventListener("change", () => {
-    const v = verSelect.value;
-    if (!v) {
-      // 回到当前版：移除快照画布，恢复原生页面
-      if (verFrame) { verFrame.remove(); verFrame = null; }
-      return;
-    }
-    if (!bgm.paused) bgm.pause();      // 离开当前版时暂停音乐
-    if (!verFrame) {
-      verFrame = document.createElement("iframe");
-      verFrame.id = "verFrame";
-      document.body.appendChild(verFrame);
-    }
-    verFrame.src = v;
   });
 
   // 时间归零
@@ -439,11 +315,6 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
     lastNow = now;
     if (!paused) simTime += dt * params.timeScale;
     resize();
-
-    // 放射中心平滑跟随
-    const ck = 1 - params.followSmooth;
-    center.x += (centerTarget.x - center.x) * ck;
-    center.y += (centerTarget.y - center.y) * ck;
 
     gl.uniform3f(U.iResolution, canvas.width, canvas.height, 1);
     gl.uniform1f(U.iTime, simTime);
@@ -467,7 +338,6 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
     gl.uniform1f(U.uGlow, params.glowGain);
     gl.uniform1f(U.uHue, params.hueShift);
     gl.uniform1f(U.uZoom, params.zoom);
-    gl.uniform2f(U.uCenter, center.x, center.y);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     frame++;
