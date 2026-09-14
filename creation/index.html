@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creation — 本地复刻 (Shadertoy XsXXDn)</title>
+<!--
+  本地复刻自 Shadertoy: https://www.shadertoy.com/view/XsXXDn
+  原作者: Silexars (Danilo Guanabara)
+  作品: Creation — DemoJS 2011 亚军，据称是首个 1kB WebGL intro
+        (http://www.pouet.net/prod.php?which=57245)
+  许可: CC BY-NC-SA 3.0 (https://creativecommons.org/licenses/by-nc-sa/3.0/deed.zh)
+  着色器在原作基础上将部分常量参数化为 uniform（本地调节用），
+  默认值与原作完全一致；并新增一个默认关闭的色相旋转后期效果。
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #hud {
+    position: fixed; left: 12px; bottom: 10px;
+    font: 12px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: rgba(255,255,255,.55); pointer-events: none; user-select: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  }
+  #hud a { color: rgba(160,200,255,.75); text-decoration: none; pointer-events: auto; }
+  #hud .dim { color: rgba(255,255,255,.35); }
+
+  /* ---- 参数面板 ---- */
+  #panel {
+    position: fixed; top: 46px; right: 12px; width: 250px;
+    max-height: calc(100vh - 58px); overflow-y: auto;
+    background: rgba(8, 14, 24, .78); backdrop-filter: blur(8px);
+    border: 1px solid rgba(140, 180, 255, .18); border-radius: 10px;
+    padding: 10px 12px 12px; color: #dfe8f5;
+    font: 12px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+    user-select: none; box-shadow: 0 4px 24px rgba(0,0,0,.45);
+  }
+  #panel.hidden { display: none; }
+  #panel h2 {
+    margin: 0 0 8px; font-size: 13px; font-weight: 600;
+    color: #aac8ff; display: flex; align-items: center; justify-content: space-between;
+  }
+  #panel .row { margin-bottom: 7px; }
+  #panel .row .lab {
+    display: flex; justify-content: space-between; margin-bottom: 1px;
+    color: rgba(223,232,245,.9);
+  }
+  #panel .row .val { color: #8fc1ff; font-variant-numeric: tabular-nums; }
+  #panel label.chk { display: flex; align-items: center; gap: 6px; margin: 2px 0 9px; cursor: pointer; }
+  #panel label.chk input { accent-color: #5b9bff; margin: 0; }
+  #panel input[type=range] {
+    width: 100%; height: 18px; margin: 0; accent-color: #5b9bff; cursor: pointer;
+  }
+  #panel .btns { display: flex; gap: 6px; margin-top: 9px; }
+  #panel button {
+    flex: 1; padding: 5px 0; border: 1px solid rgba(140,180,255,.3); border-radius: 6px;
+    background: rgba(91,155,255,.12); color: #dfe8f5; font: inherit; cursor: pointer;
+  }
+  #panel button:hover { background: rgba(91,155,255,.28); }
+  #togglePanel {
+    position: fixed; top: 12px; right: 12px; z-index: 2;
+    padding: 6px 10px; border-radius: 8px;
+    border: 1px solid rgba(140,180,255,.25); background: rgba(8,14,24,.7);
+    color: #cfe2ff; font: 12px/1 "Segoe UI", "Microsoft YaHei", sans-serif; cursor: pointer;
+  }
+  #togglePanel:hover { background: rgba(30,50,80,.8); }
+  #panel::-webkit-scrollbar { width: 8px; }
+  #panel::-webkit-scrollbar-thumb { background: rgba(140,180,255,.25); border-radius: 4px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<audio id="bgm" src="music.mp3" loop preload="auto"></audio>
+<button id="togglePanel" title="显示/隐藏参数面板">⚙ 参数</button>
+
+<div id="panel">
+  <h2><span>参数调节</span><span id="fps" style="font-weight:400;color:#7d97bd;font-variant-numeric:tabular-nums"></span></h2>
+  <label class="chk"><input type="checkbox" id="followChk" checked> 鼠标控制放射中心</label>
+  <div id="sliders"></div>
+  <div class="btns">
+    <button id="resetBtn">恢复默认</button>
+    <button id="resetTimeBtn">时间归零</button>
+  </div>
+  <div class="btns">
+    <button id="musicBtn">♪ 音乐 开</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <div class="lab"><span>音量</span><span class="val" id="volVal">0.70</span></div>
+    <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.7">
+  </div>
+</div>
+
+<div id="hud">
+  <b>Creation</b> — 本地复刻 · 原作
+  <a href="https://www.shadertoy.com/view/XsXXDn" target="_blank" rel="noopener">Silexars (Danilo Guanabara) @ Shadertoy</a>
+  (CC BY-NC-SA 3.0)<br>
+  <span class="dim">鼠标悬停：改变放射中心 · 点击 / 空格：暂停或继续</span>
+</div>
+
+<script id="frag" type="x-shader/x-fragment">
+// http://www.pouet.net/prod.php?which=57245
+// If you intend to reuse this shader, please add credits to 'Danilo Guanabara'
+
+#define t iTime
+#define r iResolution.xy
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ){
+	vec3 c;
+	float l,z=t;
+	for(int i=0;i<3;i++) {
+		vec2 uv,p=fragCoord.xy/r;
+		uv=p;
+		p-=uCenter;
+		p.x*=r.x/r.y;
+		p/=uZoom;
+		z+=uDispersion;
+		l=length(p);
+		uv+=p/l*uSwirlGain*(sin(z)+1.)*abs(sin(l*uWaveFreq-z*uWavePhase));
+		c[i]=uGlow/length(mod(uv,uCell)/uCell-.5);
+	}
+	c=hueRotate(c/l,uHue*6.2831853);
+	fragColor=vec4(c,t);
+}
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- 可调参数（默认值 = 原作效果）----
+  const PARAM_DEFS = [
+    { key: "timeScale",  label: "时间速度",   min: 0,    max: 3,    step: 0.05,  def: 1,
+      tip: "整体动画快慢（JS 侧缩放）" },
+    { key: "followSmooth", label: "跟随平滑", min: 0,    max: 0.9,  step: 0.05,  def: 0.1,
+      tip: "放射中心跟随鼠标的平滑度：0 = 即时跟随，越大越柔缓" },
+    { key: "dispersion", label: "色散强度",   min: 0,    max: 0.3,  step: 0.005, def: 0.07,
+      tip: "RGB 三层的相位差，0 = 黑白" },
+    { key: "waveFreq",   label: "波纹频率",   min: 1,    max: 30,   step: 0.5,   def: 9,
+      tip: "干涉波的空间密度（原 9）" },
+    { key: "wavePhase",  label: "波纹流速",   min: 0,    max: 6,    step: 0.1,   def: 2,
+      tip: "波纹随时间流动的速度（原式 -z-z，即 2 倍 z）" },
+    { key: "swirlGain",  label: "扭曲幅度",   min: 0,    max: 3,    step: 0.05,  def: 1,
+      tip: "UV 扭曲强度，0 = 不扭曲" },
+    { key: "cellScale",  label: "网格密度",   min: 0.3,  max: 3,    step: 0.05,  def: 1,
+      tip: "越小纹理越细密（原 1）" },
+    { key: "glowGain",   label: "辉光亮度",   min: 0.002,max: 0.04, step: 0.001, def: 0.01 },
+    { key: "hueShift",   label: "色相旋转",   min: 0,    max: 1,    step: 0.01,  def: 0,
+      tip: "后期调色，0 = 原作配色，1 = 转一整圈" },
+    { key: "zoom",       label: "画面缩放",   min: 0.4,  max: 2.5,  step: 0.05,  def: 1,
+      tip: "小于 1 拉远，大于 1 放大" },
+  ];
+  const params = {}, defaults = {};
+  PARAM_DEFS.forEach(d => { params[d.key] = d.def; defaults[d.key] = d.def; });
+
+  // ---- Shadertoy 兼容的片元着色器包装 (#version 300 es) ----
+  const userCode = document.getElementById("frag").textContent;
+  const fragSource =
+`#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec3      iResolution;
+uniform float     iTime;
+uniform float     iTimeDelta;
+uniform float     iFrameRate;
+uniform int       iFrame;
+uniform float     iChannelTime[4];
+uniform vec3      iChannelResolution[4];
+uniform vec4      iMouse;
+uniform vec4      iDate;
+uniform float     iSampleRate;
+
+// ---- 参数化 uniform（由面板控制，默认值等于原作常量）----
+uniform float uDispersion;  // 原 0.07（每层相位步进）
+uniform float uWaveFreq;    // 原 9.0（干涉波频率）
+uniform float uWavePhase;   // 原 2.0（原式 -z-z）
+uniform float uSwirlGain;   // 原 1.0
+uniform float uCell;        // 原 1.0（mod 网格尺寸）
+uniform float uGlow;        // 原 0.01
+uniform float uHue;         // 新增后期：0 = 原作
+uniform float uZoom;        // 原 1.0
+uniform vec2  uCenter;      // 放射中心（归一化坐标，原作为屏幕中心 .5,.5）
+
+vec3 hueRotate(vec3 col, float a) {
+  const vec3 k = vec3(0.57735);
+  float ca = cos(a), sa = sin(a);
+  return col*ca + cross(k, col)*sa + k*dot(k, col)*(1.0 - ca);
+}
+
+out vec4 outColor;
+
+#line 1
+` + userCode + `
+void main() { mainImage(outColor, gl_FragCoord.xy); }`;
+
+  const vsSource = `#version 300 es
+layout(location=0) in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+  const canvas = document.getElementById("c");
+  const gl = canvas.getContext("webgl2", {
+    alpha: false, antialias: false, depth: false, stencil: false,
+    preserveDrawingBuffer: false, powerPreference: "high-performance"
+  });
+  if (!gl) {
+    document.body.innerHTML =
+      "<p style='color:#fff;font:16px sans-serif;padding:2em'>此页面需要支持 WebGL2 的浏览器。</p>";
+    return;
+  }
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(sh);
+      console.error(log);
+      document.body.insertAdjacentHTML("beforeend",
+        "<pre style='color:#f88;font:12px monospace;padding:1em;white-space:pre-wrap;z-index:9'>" +
+        String(log).replace(/[<>&]/g, ch => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[ch])) +
+        "</pre>");
+      throw new Error(log);
+    }
+    return sh;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vsSource));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragSource));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(prog));
+  }
+  gl.useProgram(prog);
+
+  // 全屏三角形
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+  const U = {};
+  for (const n of ["iResolution","iTime","iTimeDelta","iFrameRate","iFrame",
+                   "iMouse","iDate","iSampleRate","iChannelTime","iChannelResolution",
+                   "uDispersion","uWaveFreq","uWavePhase","uSwirlGain","uCell",
+                   "uGlow","uHue","uZoom","uCenter"]) {
+    U[n] = gl.getUniformLocation(prog, n);
+  }
+
+  // ---- 参数面板构建 ----
+  const slidersBox = document.getElementById("sliders");
+  const inputs = {};
+  function fmt(v, step) {
+    const dec = (String(step).split(".")[1] || "").length;
+    return Number(v).toFixed(dec);
+  }
+  function refreshUI() {
+    PARAM_DEFS.forEach(d => {
+      inputs[d.key].range.value = params[d.key];
+      inputs[d.key].val.textContent = fmt(params[d.key], d.step);
+    });
+  }
+  PARAM_DEFS.forEach(d => {
+    const row = document.createElement("div");
+    row.className = "row";
+    if (d.tip) row.title = d.tip;
+    row.innerHTML =
+      `<div class="lab"><span>${d.label}</span><span class="val"></span></div>` +
+      `<input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${d.def}">`;
+    const range = row.querySelector("input");
+    const val = row.querySelector(".val");
+    range.addEventListener("input", () => {
+      params[d.key] = parseFloat(range.value);
+      val.textContent = fmt(params[d.key], d.step);
+    });
+    inputs[d.key] = { range, val };
+    slidersBox.appendChild(row);
+  });
+  refreshUI();
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    Object.assign(params, defaults);
+    refreshUI();
+  });
+
+  // ---- 窗口尺寸（DPR 上限 2，兼顾清晰度与性能）----
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  function resize() {
+    const w = Math.floor(canvas.clientWidth * DPR);
+    const h = Math.floor(canvas.clientHeight * DPR);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // ---- iMouse：按下拖动时记录 ----
+  const mouse = { x: 0, y: 0, dx: 0, dy: 0, down: false };
+  function setMouse(e, isMove) {
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * DPR;
+    const y = (r.height - (e.clientY - r.top)) * DPR;
+    if (isMove && mouse.down) { mouse.dx = x; mouse.dy = y; }
+    mouse.x = x; mouse.y = y;
+  }
+
+  // ---- 放射中心跟随鼠标 ----
+  const center = { x: 0.5, y: 0.5 }, centerTarget = { x: 0.5, y: 0.5 };
+  let followMouse = true;
+  function updateCenterTarget() {
+    if (!followMouse || canvas.width === 0) return;
+    centerTarget.x = mouse.x / canvas.width;
+    centerTarget.y = mouse.y / canvas.height;
+  }
+  canvas.addEventListener("mousemove", updateCenterTarget);
+  canvas.addEventListener("mousedown", updateCenterTarget);
+  canvas.addEventListener("mouseleave", () => { centerTarget.x = 0.5; centerTarget.y = 0.5; });
+  canvas.addEventListener("mousedown", e => { mouse.down = true; setMouse(e, false); });
+  canvas.addEventListener("mousemove", e => setMouse(e, true));
+  window.addEventListener("mouseup", () => { mouse.down = false; });
+
+  // WebGL 上下文丢失时自动恢复
+  canvas.addEventListener("webglcontextlost", e => {
+    e.preventDefault();
+    document.body.insertAdjacentHTML("beforeend",
+      "<div id='ctxlost' style='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#aac8ff;font:14px sans-serif;background:rgba(0,0,0,.6)'>WebGL 上下文丢失，正在恢复…</div>");
+  });
+  canvas.addEventListener("webglcontextrestored", () => location.reload());
+  let paused = false;
+  canvas.addEventListener("click", () => { paused = !paused; });
+  window.addEventListener("keydown", e => {
+    if (e.code === "Space") { e.preventDefault(); paused = !paused; }
+  });
+
+  // 面板显示/隐藏
+  const panel = document.getElementById("panel");
+  const toggleBtn = document.getElementById("togglePanel");
+  toggleBtn.addEventListener("click", () => {
+    panel.classList.toggle("hidden");
+  });
+
+  // 鼠标放射中心开关
+  const followChk = document.getElementById("followChk");
+  followChk.addEventListener("change", () => {
+    followMouse = followChk.checked;
+    if (!followMouse) { centerTarget.x = 0.5; centerTarget.y = 0.5; }
+  });
+
+  // ---- 背景音乐（无限循环；浏览器要求首次真实交互后才能出声）----
+  const bgm = document.getElementById("bgm");
+  const musicBtn = document.getElementById("musicBtn");
+  const volSlider = document.getElementById("volSlider");
+  const volVal = document.getElementById("volVal");
+  let musicOn = true;
+  bgm.volume = 0.7;
+  function tryStartMusic() {
+    if (musicOn && bgm.paused) bgm.play().catch(() => {});
+  }
+  function updateMusicBtn() {
+    musicBtn.textContent = musicOn ? "♪ 音乐 开" : "♪ 音乐 关";
+  }
+  window.addEventListener("pointerdown", tryStartMusic);
+  window.addEventListener("keydown", tryStartMusic);
+  musicBtn.addEventListener("click", () => {
+    musicOn = !musicOn;
+    if (musicOn) tryStartMusic(); else bgm.pause();
+    updateMusicBtn();
+  });
+  bgm.addEventListener("error", () => {
+    musicBtn.textContent = "♪ 音乐不可用";
+    musicBtn.disabled = true;
+    volSlider.disabled = true;
+  });
+  volSlider.addEventListener("input", () => {
+    bgm.volume = parseFloat(volSlider.value);
+    volVal.textContent = bgm.volume.toFixed(2);
+  });
+
+  // 时间归零
+  document.getElementById("resetTimeBtn").addEventListener("click", () => { simTime = 0; });
+
+  // ---- 主循环 ----
+  const fpsEl = document.getElementById("fps");
+  const t0 = performance.now();
+  let simTime = 0, lastNow = t0, frame = 0, fpsAcc = 0, fpsN = 0;
+
+  function render(now) {
+    const dt = Math.min((now - lastNow) / 1000, 0.1);
+    lastNow = now;
+    if (!paused) simTime += dt * params.timeScale;
+    resize();
+
+    // 放射中心平滑跟随
+    const ck = 1 - params.followSmooth;
+    center.x += (centerTarget.x - center.x) * ck;
+    center.y += (centerTarget.y - center.y) * ck;
+
+    gl.uniform3f(U.iResolution, canvas.width, canvas.height, 1);
+    gl.uniform1f(U.iTime, simTime);
+    gl.uniform1f(U.iTimeDelta, dt);
+    gl.uniform1f(U.iFrameRate, dt > 0 ? 1 / dt : 0);
+    gl.uniform1i(U.iFrame, frame);
+    gl.uniform4f(U.iMouse, mouse.x, mouse.y, mouse.down ? mouse.dx : -mouse.dx,
+                                     mouse.down ? mouse.dy : -mouse.dy);
+    const d = new Date();
+    gl.uniform4f(U.iDate, d.getFullYear(), d.getMonth() + 1, d.getDate(),
+                  d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds());
+    gl.uniform1f(U.iSampleRate, 44100);
+    gl.uniform1fv(U.iChannelTime, [0, 0, 0, 0]);
+    gl.uniform3fv(U.iChannelResolution, [1,1,1, 1,1,1, 1,1,1, 1,1,1]);
+
+    gl.uniform1f(U.uDispersion, params.dispersion);
+    gl.uniform1f(U.uWaveFreq, params.waveFreq);
+    gl.uniform1f(U.uWavePhase, params.wavePhase);
+    gl.uniform1f(U.uSwirlGain, params.swirlGain);
+    gl.uniform1f(U.uCell, params.cellScale);
+    gl.uniform1f(U.uGlow, params.glowGain);
+    gl.uniform1f(U.uHue, params.hueShift);
+    gl.uniform1f(U.uZoom, params.zoom);
+    gl.uniform2f(U.uCenter, center.x, center.y);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    frame++;
+
+    // FPS 显示（每半秒刷新）
+    fpsAcc += dt; fpsN++;
+    if (fpsAcc >= 0.5) {
+      fpsEl.textContent = Math.round(fpsN / fpsAcc) + " fps";
+      fpsAcc = 0; fpsN = 0;
+    }
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Octagrams — 本地复刻 (Shadertoy tlVGDt)</title>
+<!--
+  本地复刻自 Shadertoy: https://www.shadertoy.com/view/tlVGDt
+  原作者: whisky_shusuky  |  作品: Octagrams (2020)
+  许可: CC BY-NC-SA 3.0 (https://creativecommons.org/licenses/by-nc-sa/3.0/deed.zh)
+  着色器在原作基础上将部分常量参数化为 uniform（本地调节用），整体结构未变；
+  页面为通用的 Shadertoy 兼容 WebGL2 运行时 + 参数面板。
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #hud {
+    position: fixed; left: 12px; bottom: 10px;
+    font: 12px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: rgba(255,255,255,.55); pointer-events: none; user-select: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  }
+  #hud a { color: rgba(160,200,255,.75); text-decoration: none; pointer-events: auto; }
+  #hud .dim { color: rgba(255,255,255,.35); }
+
+  /* ---- 参数面板 ---- */
+  #panel {
+    position: fixed; top: 46px; right: 12px; width: 250px;
+    max-height: calc(100vh - 58px); overflow-y: auto;
+    background: rgba(8, 14, 24, .78); backdrop-filter: blur(8px);
+    border: 1px solid rgba(140, 180, 255, .18); border-radius: 10px;
+    padding: 10px 12px 12px; color: #dfe8f5;
+    font: 12px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+    user-select: none; box-shadow: 0 4px 24px rgba(0,0,0,.45);
+  }
+  #panel.hidden { display: none; }
+  #panel h2 {
+    margin: 0 0 8px; font-size: 13px; font-weight: 600;
+    color: #aac8ff; display: flex; align-items: center; justify-content: space-between;
+  }
+  #panel .row { margin-bottom: 7px; }
+  #panel .row .lab {
+    display: flex; justify-content: space-between; margin-bottom: 1px;
+    color: rgba(223,232,245,.9);
+  }
+  #panel .row .val { color: #8fc1ff; font-variant-numeric: tabular-nums; }
+  #panel input[type=range] {
+    width: 100%; height: 18px; margin: 0; accent-color: #5b9bff; cursor: pointer;
+  }
+  #panel .btns { display: flex; gap: 6px; margin-top: 9px; }
+  #panel button {
+    flex: 1; padding: 5px 0; border: 1px solid rgba(140,180,255,.3); border-radius: 6px;
+    background: rgba(91,155,255,.12); color: #dfe8f5; font: inherit; cursor: pointer;
+  }
+  #panel button:hover { background: rgba(91,155,255,.28); }
+  #togglePanel {
+    position: fixed; top: 12px; right: 12px; z-index: 2;
+    padding: 6px 10px; border-radius: 8px;
+    border: 1px solid rgba(140,180,255,.25); background: rgba(8,14,24,.7);
+    color: #cfe2ff; font: 12px/1 "Segoe UI", "Microsoft YaHei", sans-serif; cursor: pointer;
+  }
+  #togglePanel:hover { background: rgba(30,50,80,.8); }
+  #panel::-webkit-scrollbar { width: 8px; }
+  #panel::-webkit-scrollbar-thumb { background: rgba(140,180,255,.25); border-radius: 4px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="togglePanel" title="显示/隐藏参数面板">⚙ 参数</button>
+
+<div id="panel">
+  <h2><span>参数调节</span><span id="fps" style="font-weight:400;color:#7d97bd;font-variant-numeric:tabular-nums"></span></h2>
+  <div id="sliders"></div>
+  <div class="btns">
+    <button id="resetBtn">恢复默认</button>
+    <button id="resetTimeBtn">时间归零</button>
+  </div>
+</div>
+
+<div id="hud">
+  <b>Octagrams</b> — 本地复刻 · 原作
+  <a href="https://www.shadertoy.com/view/tlVGDt" target="_blank" rel="noopener">whisky_shusuky @ Shadertoy</a>
+  (CC BY-NC-SA 3.0)<br>
+  <span class="dim">点击 / 空格：暂停或继续</span>
+</div>
+
+<script id="frag" type="x-shader/x-fragment">
+precision highp float;
+
+
+float gTime = 0.;
+const float REPEAT = 5.0;
+
+// 回転行列
+mat2 rot(float a) {
+	float c = cos(a), s = sin(a);
+	return mat2(c,s,-s,c);
+}
+
+float sdBox( vec3 p, vec3 b )
+{
+	vec3 q = abs(p) - b;
+	return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+}
+
+float box(vec3 pos, float scale) {
+	pos *= scale;
+	float base = sdBox(pos, vec3(.4,.4,.1)) /1.5;
+	pos.xy *= 5.;
+	pos.y -= 3.5;
+	pos.xy *= rot(.75);
+	float result = -base;
+	return result;
+}
+
+float box_set(vec3 pos, float iTime) {
+	vec3 pos_origin = pos;
+	pos = pos_origin;
+	pos .y += sin(gTime * 0.4) * uBoxSwing;
+	pos.xy *=   rot(.8);
+	float box1 = box(pos,2. - abs(sin(gTime * 0.4)) * 1.5);
+	pos = pos_origin;
+	pos .y -=sin(gTime * 0.4) * uBoxSwing;
+	pos.xy *=   rot(.8);
+	float box2 = box(pos,2. - abs(sin(gTime * 0.4)) * 1.5);
+	pos = pos_origin;
+	pos .x +=sin(gTime * 0.4) * uBoxSwing;
+	pos.xy *=   rot(.8);
+	float box3 = box(pos,2. - abs(sin(gTime * 0.4)) * 1.5);	
+	pos = pos_origin;
+	pos .x -=sin(gTime * 0.4) * uBoxSwing;
+	pos.xy *=   rot(.8);
+	float box4 = box(pos,2. - abs(sin(gTime * 0.4)) * 1.5);	
+	pos = pos_origin;
+	pos.xy *=   rot(.8);
+	float box5 = box(pos,.5) * 6.;	
+	pos = pos_origin;
+	float box6 = box(pos,.5) * 6.;	
+	float result = max(max(max(max(max(box1,box2),box3),box4),box5),box6);
+	return result;
+}
+
+float map(vec3 pos, float iTime) {
+	vec3 pos_origin = pos;
+	float box_set1 = box_set(pos, iTime);
+
+	return box_set1;
+}
+
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+	vec2 p = (fragCoord.xy * 2. - iResolution.xy) / min(iResolution.x, iResolution.y);
+	vec3 ro = vec3(0., -0.2 ,iTime * uCamSpeed);
+	vec3 ray = normalize(vec3(p, 1.5));
+	ray.xy = ray.xy * rot(sin(iTime * uSwayFreq) * uSwayAmp);
+	ray.yz = ray.yz * rot(sin(iTime * .05) * uPitchAmp);
+	float t = 0.1;
+	vec3 col = vec3(0.);
+	float ac = 0.0;
+
+
+	for (int i = 0; i < uSteps; i++){
+		vec3 pos = ro + ray * t;
+		pos = mod(pos-2., 4.) -2.;
+		gTime = iTime -float(i) * 0.01;
+		
+		float d = map(pos, iTime);
+
+		d = max(abs(d), 0.01);
+		ac += exp(-d * uGlowSharp);
+
+		t += d * uStepFactor;
+	}
+
+	col = vec3(ac * uGlowGain);
+
+	col +=vec3(0.,0.2 * abs(sin(iTime)),0.5 + sin(iTime) * 0.2) * uTintGain;
+
+
+	fragColor = vec4(col ,1.0 - t * (0.02 + 0.02 * sin (iTime)));
+}
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- 可调参数（默认值 = 原作效果）----
+  const PARAM_DEFS = [
+    { key: "timeScale",  label: "时间速度",   min: 0,    max: 3,     step: 0.05,  def: 1,
+      tip: "整体动画快慢（JS 侧缩放）" },
+    { key: "camSpeed",   label: "相机前进速度", min: 0,    max: 12,    step: 0.1,   def: 4 },
+    { key: "swayAmp",    label: "水平摇摆幅度", min: 0,    max: 10,    step: 0.1,   def: 5 },
+    { key: "swayFreq",   label: "水平摇摆频率", min: 0,    max: 0.2,   step: 0.005, def: 0.03 },
+    { key: "pitchAmp",   label: "俯仰摆动幅度", min: 0,    max: 1,     step: 0.01,  def: 0.2 },
+    { key: "boxSwing",   label: "方块摆动幅度", min: 0,    max: 5,     step: 0.1,   def: 2.5 },
+    { key: "glowSharp",  label: "辉光锐度",    min: 5,    max: 40,    step: 0.5,   def: 23,
+      tip: "越大发光边缘越锐利" },
+    { key: "glowGain",   label: "辉光亮度",    min: 0.002,max: 0.06,  step: 0.001, def: 0.02 },
+    { key: "tintGain",   label: "底色亮度",    min: 0,    max: 2,     step: 0.05,  def: 1,
+      tip: "蓝色背景的强度" },
+    { key: "stepFactor", label: "步进系数",    min: 0.2,  max: 1,     step: 0.05,  def: 0.55,
+      tip: "越大越快但可能穿模" },
+    { key: "steps",      label: "迭代步数",    min: 20,   max: 200,   step: 1,     def: 99,
+      tip: "越大越精细、越吃性能" },
+  ];
+  const params = {}, defaults = {};
+  PARAM_DEFS.forEach(d => { params[d.key] = d.def; defaults[d.key] = d.def; });
+
+  // ---- Shadertoy 兼容的片元着色器包装 (#version 300 es) ----
+  const userCode = document.getElementById("frag").textContent;
+  const fragSource =
+`#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec3      iResolution;
+uniform float     iTime;
+uniform float     iTimeDelta;
+uniform float     iFrameRate;
+uniform int       iFrame;
+uniform float     iChannelTime[4];
+uniform vec3      iChannelResolution[4];
+uniform vec4      iMouse;
+uniform vec4      iDate;
+uniform float     iSampleRate;
+
+// ---- 参数化 uniform（由面板控制，默认值等于原作常量）----
+uniform float uCamSpeed;    // 原 4.0
+uniform float uSwayAmp;     // 原 5.0
+uniform float uSwayFreq;    // 原 0.03
+uniform float uPitchAmp;    // 原 0.2
+uniform float uBoxSwing;    // 原 2.5
+uniform float uGlowSharp;   // 原 23.0
+uniform float uGlowGain;    // 原 0.02
+uniform float uTintGain;    // 原 1.0
+uniform float uStepFactor;  // 原 0.55
+uniform int   uSteps;       // 原 99
+
+out vec4 outColor;
+
+#line 1
+` + userCode + `
+void main() { mainImage(outColor, gl_FragCoord.xy); }`;
+
+  const vsSource = `#version 300 es
+layout(location=0) in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+  const canvas = document.getElementById("c");
+  const gl = canvas.getContext("webgl2", {
+    alpha: false, antialias: false, depth: false, stencil: false,
+    preserveDrawingBuffer: false, powerPreference: "high-performance"
+  });
+  if (!gl) {
+    document.body.innerHTML =
+      "<p style='color:#fff;font:16px sans-serif;padding:2em'>此页面需要支持 WebGL2 的浏览器。</p>";
+    return;
+  }
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(sh);
+      console.error(log);
+      document.body.insertAdjacentHTML("beforeend",
+        "<pre style='color:#f88;font:12px monospace;padding:1em;white-space:pre-wrap;z-index:9'>" +
+        String(log).replace(/[<>&]/g, ch => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[ch])) +
+        "</pre>");
+      throw new Error(log);
+    }
+    return sh;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vsSource));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragSource));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(prog));
+  }
+  gl.useProgram(prog);
+
+  // 全屏三角形
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+  const U = {};
+  for (const n of ["iResolution","iTime","iTimeDelta","iFrameRate","iFrame",
+                   "iMouse","iDate","iSampleRate","iChannelTime","iChannelResolution",
+                   "uCamSpeed","uSwayAmp","uSwayFreq","uPitchAmp","uBoxSwing",
+                   "uGlowSharp","uGlowGain","uTintGain","uStepFactor","uSteps"]) {
+    U[n] = gl.getUniformLocation(prog, n);
+  }
+
+  // ---- 参数面板构建 ----
+  const slidersBox = document.getElementById("sliders");
+  const inputs = {};
+  function fmt(v, step) {
+    const dec = (String(step).split(".")[1] || "").length;
+    return Number(v).toFixed(dec);
+  }
+  function refreshUI() {
+    PARAM_DEFS.forEach(d => {
+      inputs[d.key].range.value = params[d.key];
+      inputs[d.key].val.textContent = fmt(params[d.key], d.step);
+    });
+  }
+  PARAM_DEFS.forEach(d => {
+    const row = document.createElement("div");
+    row.className = "row";
+    if (d.tip) row.title = d.tip;
+    row.innerHTML =
+      `<div class="lab"><span>${d.label}</span><span class="val"></span></div>` +
+      `<input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${d.def}">`;
+    const range = row.querySelector("input");
+    const val = row.querySelector(".val");
+    range.addEventListener("input", () => {
+      params[d.key] = parseFloat(range.value);
+      val.textContent = fmt(params[d.key], d.step);
+    });
+    inputs[d.key] = { range, val };
+    slidersBox.appendChild(row);
+  });
+  refreshUI();
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    Object.assign(params, defaults);
+    refreshUI();
+  });
+
+  // ---- 窗口尺寸（DPR 上限 2，兼顾清晰度与性能）----
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  function resize() {
+    const w = Math.floor(canvas.clientWidth * DPR);
+    const h = Math.floor(canvas.clientHeight * DPR);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // ---- iMouse：按下拖动时记录 ----
+  const mouse = { x: 0, y: 0, dx: 0, dy: 0, down: false };
+  function setMouse(e, isMove) {
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * DPR;
+    const y = (r.height - (e.clientY - r.top)) * DPR;
+    if (isMove && mouse.down) { mouse.dx = x; mouse.dy = y; }
+    mouse.x = x; mouse.y = y;
+  }
+  canvas.addEventListener("mousedown", e => { mouse.down = true; setMouse(e, false); });
+  canvas.addEventListener("mousemove", e => setMouse(e, true));
+  window.addEventListener("mouseup", () => { mouse.down = false; });
+
+  // WebGL 上下文丢失时自动恢复
+  canvas.addEventListener("webglcontextlost", e => {
+    e.preventDefault();
+    document.body.insertAdjacentHTML("beforeend",
+      "<div id='ctxlost' style='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#aac8ff;font:14px sans-serif;background:rgba(0,0,0,.6)'>WebGL 上下文丢失，正在恢复…</div>");
+  });
+  canvas.addEventListener("webglcontextrestored", () => location.reload());
+  let paused = false;
+  canvas.addEventListener("click", () => { paused = !paused; });
+  window.addEventListener("keydown", e => {
+    if (e.code === "Space") { e.preventDefault(); paused = !paused; }
+  });
+
+  // 面板显示/隐藏
+  const panel = document.getElementById("panel");
+  const toggleBtn = document.getElementById("togglePanel");
+  toggleBtn.addEventListener("click", () => {
+    panel.classList.toggle("hidden");
+  });
+
+  // 时间归零
+  document.getElementById("resetTimeBtn").addEventListener("click", () => { simTime = 0; });
+
+  // ---- 主循环 ----
+  const fpsEl = document.getElementById("fps");
+  const t0 = performance.now();
+  let simTime = 0, lastNow = t0, frame = 0, fpsAcc = 0, fpsN = 0;
+
+  function render(now) {
+    const dt = Math.min((now - lastNow) / 1000, 0.1);
+    lastNow = now;
+    if (!paused) simTime += dt * params.timeScale;
+    resize();
+
+    gl.uniform3f(U.iResolution, canvas.width, canvas.height, 1);
+    gl.uniform1f(U.iTime, simTime);
+    gl.uniform1f(U.iTimeDelta, dt);
+    gl.uniform1f(U.iFrameRate, dt > 0 ? 1 / dt : 0);
+    gl.uniform1i(U.iFrame, frame);
+    gl.uniform4f(U.iMouse, mouse.x, mouse.y, mouse.down ? mouse.dx : -mouse.dx,
+                                     mouse.down ? mouse.dy : -mouse.dy);
+    const d = new Date();
+    gl.uniform4f(U.iDate, d.getFullYear(), d.getMonth() + 1, d.getDate(),
+                  d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds());
+    gl.uniform1f(U.iSampleRate, 44100);
+    gl.uniform1fv(U.iChannelTime, [0, 0, 0, 0]);
+    gl.uniform3fv(U.iChannelResolution, [1,1,1, 1,1,1, 1,1,1, 1,1,1]);
+
+    gl.uniform1f(U.uCamSpeed, params.camSpeed);
+    gl.uniform1f(U.uSwayAmp, params.swayAmp);
+    gl.uniform1f(U.uSwayFreq, params.swayFreq);
+    gl.uniform1f(U.uPitchAmp, params.pitchAmp);
+    gl.uniform1f(U.uBoxSwing, params.boxSwing);
+    gl.uniform1f(U.uGlowSharp, params.glowSharp);
+    gl.uniform1f(U.uGlowGain, params.glowGain);
+    gl.uniform1f(U.uTintGain, params.tintGain);
+    gl.uniform1f(U.uStepFactor, params.stepFactor);
+    gl.uniform1i(U.uSteps, Math.round(params.steps));
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    frame++;
+
+    // FPS 显示（每半秒刷新）
+    fpsAcc += dt; fpsN++;
+    if (fpsAcc >= 0.5) {
+      fpsEl.textContent = Math.round(fpsN / fpsAcc) + " fps";
+      fpsAcc = 0; fpsN = 0;
+    }
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
