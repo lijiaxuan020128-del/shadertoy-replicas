@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shadertoy 本地复刻</title>
+<!--
+  两个 Shadertoy 经典着色器的本地复刻合集。
+  原作遵循 CC BY-NC-SA 3.0 授权，署名见各页面与 README。
+-->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 50% -20%, #14243f 0%, #060a12 55%, #03050a 100%);
+    color: #dfe8f5;
+    font: 15px/1.7 "Segoe UI", "Microsoft YaHei", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 60px 20px 40px;
+  }
+  h1 { font-size: 30px; font-weight: 600; margin: 0 0 6px; color: #eaf2ff;
+       text-shadow: 0 0 24px rgba(91,155,255,.45); }
+  .sub { color: rgba(223,232,245,.6); margin-bottom: 40px; font-size: 14px; }
+  .sub a { color: #8fc1ff; text-decoration: none; }
+  .cards { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 960px; }
+  .card {
+    flex: 1 1 380px; max-width: 460px;
+    background: rgba(8,14,24,.72); border: 1px solid rgba(140,180,255,.18);
+    border-radius: 14px; padding: 26px 28px;
+    box-shadow: 0 6px 32px rgba(0,0,0,.5);
+    transition: transform .18s ease, border-color .18s ease;
+  }
+  .card:hover { transform: translateY(-4px); border-color: rgba(140,180,255,.45); }
+  .card h2 { margin: 0 0 4px; font-size: 20px; color: #aac8ff; }
+  .card .orig { font-size: 13px; color: rgba(223,232,245,.55); margin-bottom: 14px; }
+  .card .orig a { color: #8fc1ff; text-decoration: none; }
+  .card p { margin: 0 0 18px; font-size: 14px; color: rgba(223,232,245,.82); }
+  .card .go {
+    display: inline-block; padding: 8px 22px; border-radius: 8px;
+    background: rgba(91,155,255,.16); border: 1px solid rgba(140,180,255,.35);
+    color: #dfe8f5; text-decoration: none; font-size: 14px;
+  }
+  .card .go:hover { background: rgba(91,155,255,.3); }
+  footer { margin-top: 48px; color: rgba(223,232,245,.4); font-size: 12.5px; text-align: center; }
+  footer a { color: #7d9fd0; text-decoration: none; }
+</style>
+</head>
+<body>
+  <h1>Shadertoy 本地复刻</h1>
+  <div class="sub">用 WebGL2 复刻的两个 Shadertoy 经典着色器 · 带参数面板的互动版 ·
+    <a href="https://github.com/lijiaxuan020128-del/shadertoy-replicas" target="_blank" rel="noopener">GitHub 仓库</a>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>Creation</h2>
+      <div class="orig">原作：<a href="https://www.shadertoy.com/view/XsXXDn" target="_blank" rel="noopener">Silexars (Danilo Guanabara)</a> · DemoJS 2011 · 首个 1kB WebGL intro</div>
+      <p>宇宙大爆炸式的干涉星流。9 个参数滑杆实时调色变形；鼠标悬停任意位置，那里就成为新的放射中心；页面内置版本切换器，可在 v1–v4 之间穿越。背景音乐仅本地版提供。</p>
+      <a class="go" href="creation/">进入 Creation →</a>
+    </div>
+    <div class="card">
+      <h2>Octagrams</h2>
+      <div class="orig">原作：<a href="https://www.shadertoy.com/view/tlVGDt" target="_blank" rel="noopener">whisky_shusuky</a> · 体积光线步进</div>
+      <p>蓝色八角星万花筒隧道。11 个参数滑杆：相机速度、摇摆幅度、辉光锐度/亮度、迭代步数……从顺滑慢速到失控眩晕，随意调校。</p>
+      <a class="go" href="octagrams/">进入 Octagrams →</a>
+    </div>
+  </div>
+
+  <footer>
+    着色器原作以 <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/deed.zh" target="_blank" rel="noopener">CC BY-NC-SA 3.0</a> 授权，
+    本项目为署名复刻，仅作学习交流 · <a href="https://github.com/lijiaxuan020128-del/shadertoy-replicas" target="_blank" rel="noopener">源码</a>
+  </footer>
+</body>
+</html>

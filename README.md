@@ -2,6 +2,13 @@
 
 用 WebGl2 在本地复刻的两个 Shadertoy 经典着色器，均为单文件页面（着色器内嵌），双击 `index.html` 即可运行，无需服务器。每个项目附带参数调节面板（滑杆实时生效，默认值等于原作效果）。
 
+## 在线预览（GitHub Pages）
+
+- 首页：<https://lijiaxuan020128-del.github.io/shadertoy-replicas/>
+- [Creation](https://lijiaxuan020128-del.github.io/shadertoy-replicas/creation/)（在线版不含背景音乐，音乐仅本地提供）
+- [Octagrams](https://lijiaxuan020128-del.github.io/shadertoy-replicas/octagrams/)
+
+
 ## 项目
 
 ### [creation/](creation/) — Creation by Silexars
